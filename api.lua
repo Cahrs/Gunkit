@@ -1,6 +1,5 @@
 gunkit = {}
 gunkit.firing = {}
---gunkit.fire_queue = {}
 gunkit.timer = {}
 
 --
@@ -53,8 +52,6 @@ function gunkit.register_firearm(name, def)
         mode = "fire",
         mag_type = def.mag_type or nil,
         callbacks = {fire = def.callbacks.fire or nil, alt_fire = def.callbacks.alt_fire or nil},
-
-        --TODO: make it so that gunkit.fire() is only called when gun contains a mag
 
         on_use = function(itemstack, user, pointed_thing)
             local meta = itemstack:get_meta()
@@ -209,7 +206,6 @@ function gunkit.register_mag(name, def)
                 itemstack:get_meta():set_int("bullets", count + needs)
                 itemstack:set_wear(65534 - (65534 / item.max_ammo * (count + needs) - 1))
             end
-            --minetest.chat_send_all(dump(itemstack:get_meta():to_table()))
         end
 
         return itemstack
@@ -262,8 +258,6 @@ function gunkit.fire(user, stack, p_pos, e_pos)
 
     local item = minetest.registered_items[stack:get_name()]
     local mode = meta:get_string("mode")
-
-    --minetest.chat_send_all(dump(tonumber(stack:get_meta():get_string("mag"):split(",")[2])))
 
     local shots = item[mode].shots
     local count = tonumber(mag[2])
@@ -322,20 +316,8 @@ end
 
 minetest.register_globalstep(
     function(dtime)
-        local current = minetest.get_us_time() / 1000000
-
-        --[[for user, tbl in pairs(gunkit.fire_queue) do
-            for key, bullet in pairs(tbl) do
-                if current - bullet.current > bullet.fire.range / bullet.fire.speed then
-                    gunkit.fire(user, bullet.p_pos, bullet.e_pos, bullet.fire)
-                    gunkit.fire_queue[user][key] = nil
-                end
-            end
-            if gunkit.get_table_size(tbl) == 0 then
-                gunkit.fire_queue[user] = nil
-            end
-        end]]
-
+        local current = minetest.get_us_time() / 100000
+        
         --check users gun cooldowns
         for user, items in pairs(gunkit.timer) do
             for item, tbl in pairs(items) do
@@ -373,17 +355,11 @@ minetest.register_globalstep(
                                 minetest.after(item[mode].range / item[mode].speed, gunkit.fire, user, tbl.stack, p_pos, e_pos)
                             end
 
-                            --[[if not gunkit.fire_queue[user] then
-                                gunkit.fire_queue[user] = {}
-                            end]]
-                            --table.insert(gunkit.fire_queue[user], {current = current, p_pos = p_pos, e_pos = e_pos, fire = item[mode]})
-
                             gunkit.timer[user] = gunkit.timer[user] or {}
                             gunkit.timer[user][item.name] = gunkit.timer[user][item.name] or {}
 
                             --add to cooldown table
                             gunkit.timer[user][item.name][mode] = current
-                            --minetest.chat_send_all(dump(gunkit.timer[user][item.name]))
                         end
                     end
                 end
@@ -416,11 +392,9 @@ minetest.register_globalstep(
                     user:set_wielded_item(tbl.stack)
                 end
                 if not keys.LMB and user:get_fov() == 0 then
-                    --minetest.chat_send_all("Removing from list")
                     gunkit.firing[user] = nil
                 end
             else
-                --minetest.chat_send_all("Removing from list")
                 gunkit.firing[user] = nil
                 user:get_inventory():set_stack("main", tbl.wield_index, tbl.stack)
                 user:set_fov(0)
