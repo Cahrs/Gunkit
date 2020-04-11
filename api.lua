@@ -130,7 +130,7 @@ function gunkit.register_firearm(name, def)
                 end
             else
                 --drop the gun
-                minetest.item_drop(itemstack, user, dropper:get_pos())
+                minetest.item_drop(itemstack, dropper, dropper:get_pos())
             end
 
             --update itemstack
@@ -368,7 +368,7 @@ minetest.register_globalstep(
                 local zoom = item[mode].zoom or item[gunkit.swap_mode(mode)].zoom
 
                 --handle ADS (Aim-Down-Sights)
-                if item[mode].zoom then
+                if zoom then
                     if fov == 0 then
                         fov = 1
                     end
@@ -380,7 +380,7 @@ minetest.register_globalstep(
                         end
                     end
                 end
-                if fov ~= 0 and (not keys.RMB or not item[mode].zoom) then
+                if fov ~= 0 and (not keys.RMB or not zoom) then
                     if fov < 1 then
                         fov = fov + (1 / zoom) / 5
                         user:set_fov(fov, true)
