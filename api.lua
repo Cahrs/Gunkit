@@ -365,7 +365,7 @@ minetest.register_globalstep(
                 end
 
                 local fov = user:get_fov()
-                local zoom = item[mode].zoom or item[gunkit.swap_mode(mode)].zoom
+                local zoom = item[mode].zoom or nil
 
                 --handle ADS (Aim-Down-Sights)
                 if zoom then
