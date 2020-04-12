@@ -55,20 +55,14 @@ function gunkit.register_firearm(name, def)
 
         on_use = function(itemstack, user, pointed_thing)
             local meta = itemstack:get_meta()
-
-            -- is fire mode set?
+            
             if not meta:contains("mode") then
                 meta:set_string("mode", "fire")
             end
 
-            -- is the gun loaded?
             if not meta:contains("mag") then
                 local gun = minetest.registered_items[itemstack:get_name()]
 
-                --TODO: as part of optimization, check to see if at least one of mag exists before looping through "main" list
-
-                --[[loop through inventory filtering for the mag with the most ammo and a mag type that corresponds 
-                    with the wielded gun, and has a ammo count > 0]]
                 local upper, upper_bullets, idx
                 for index, stack in ipairs(user:get_inventory():get_list("main")) do
                     local meta = stack:get_meta()
@@ -79,37 +73,48 @@ function gunkit.register_firearm(name, def)
                         end
                     end
                 end
-                
-                --was a mag found?
-                if upper and upper_bullets then
+
+                if upper and upper_bullets and idx then
                     meta:set_string("mag", upper:get_name() .. "," .. upper_bullets)
                     itemstack:set_wear(65534 - (65534 / minetest.registered_items[upper:get_name()].max_ammo * upper_bullets) + 1)
                     user:get_inventory():set_stack("main", idx, nil)
                 end
                 return itemstack
             else
-                --add to firing queue
-                gunkit.firing[user] = {stack = itemstack, wield_index = user:get_wield_index()}
+                local temp = meta:get_string("mag"):split(",")
+                local mag, ammo = temp[1], tonumber(temp[2])
+
+                if not gunkit.firing[user] and ammo > 0 then
+                    gunkit.firing[user] = {stack = itemstack, wield_index = user:get_wield_index(), mag = {name = mag, ammo = ammo}}
+                end
             end
         end,
+
         on_secondary_use = function(itemstack, user, pointed_thing)
-            --is the fire mode set?
             local meta = itemstack:get_meta()
+
             if not meta:get_string("mode") then
                 meta:set_string("mode", "fire")
                 return itemstack
             end
 
-            --add to firing queue
-            gunkit.firing[user] = {stack = itemstack, wield_index = user:get_wield_index()}
+            if meta:contains("mag") then
+                local temp = meta:get_string("mag"):split(",")
+                local mag, ammo = temp[1], tonumber(temp[2])
+
+                if not gunkit.firing[user] and ammo > 0 then
+                    gunkit.firing[user] = {stack = itemstack, wield_index = user:get_wield_index(), mag = {name = mag, ammo = ammo}}
+                end
+            end
         end,
+
         on_drop = function(itemstack, dropper, pos)
             local meta = itemstack:get_meta()
             local wield = dropper:get_wield_index()
             local inv = dropper:get_inventory()
 
             --is the gun loaded?
-            if meta:contains("mag") and not gunkit.firing[dropper] then
+            if meta:contains("mag") then
                 local mag = meta:get_string("mag"):split(",")
 
                 --is the mag empty?
@@ -118,22 +123,20 @@ function gunkit.register_firearm(name, def)
                     if inv:room_for_item("main", stack) then
                         inv:add_item("main", stack)
                     else
-                        minetest.item_drop(stack, user, dropper:get_pos())
+                        minetest.item_drop(stack, dropper, pos)
                     end
                     itemstack:set_wear(0)
                     meta:set_string("mag", "")
-
-                --if not, swap fire mode instead
+                
+                --if not then swap fire mode
                 elseif meta:contains("mode") then
                     meta:set_string("mode", gunkit.swap_mode(meta:get_string("mode")))
-                    minetest.sound_play("toggle_fire", {dropper})
+                    minetest.sound_play("toggle_fire", {pos = dropper:get_pos()})
                 end
             else
-                --drop the gun
-                minetest.item_drop(itemstack, dropper, dropper:get_pos())
+                minetest.item_drop(itemstack, dropper, pos)
             end
 
-            --update itemstack
             inv:set_stack("main", wield, itemstack)
         end,
     })
@@ -188,7 +191,6 @@ function gunkit.register_mag(name, def)
         elseif mag and ammo then
             local bullets = ammo:get_count()
             local needs = item.max_ammo - count
-            local leftover = bullets - needs
 
             if needs == 0 then 
                 craft_inv:add_item("craft", {name = item.ammo})
@@ -196,16 +198,17 @@ function gunkit.register_mag(name, def)
                 return
             end
 
+            local use
             if needs >= bullets then
-                minetest.chat_send_all("needs")
+                use = count + bullets
                 craft_inv:remove_item("craft", {name = item.ammo, count = bullets})
-                itemstack:get_meta():set_int("bullets", count + bullets)
-                itemstack:set_wear(65534 - (65534 / item.max_ammo * (count + bullets) - 1))
             else
+                use = count + needs
                 craft_inv:remove_item("craft", {name = item.ammo, count = (needs - 1)})
-                itemstack:get_meta():set_int("bullets", count + needs)
-                itemstack:set_wear(65534 - (65534 / item.max_ammo * (count + needs) - 1))
             end
+
+            itemstack:get_meta():set_int("bullets", use)
+            itemstack:set_wear(65534 - (65534 / item.max_ammo * use - 1))
         end
 
         return itemstack
@@ -227,12 +230,13 @@ end
 
 --runs functions and returns returned bool, or true
 function gunkit.check_bools(func, itemstack, user, obj)
-    if not func or not itemstack or not user or not obj then
-        return
-    end
     local bool = true
 
-    bool = func(itemstack, user, obj)
+    if obj then
+        bool = func(itemstack, user, obj)
+    else
+        bool = func(itemstack, user)
+    end
 
     return bool
 end
@@ -252,33 +256,24 @@ function gunkit.get_vector(user, p_pos, def)
 end
 
 --handles raycasts for bullets, fire!
-function gunkit.fire(user, stack, p_pos, e_pos)
+function gunkit.fire(user, stack, mag, p_pos, e_pos)
     local meta = stack:get_meta()
-    local mag = meta:get_string("mag"):split(",")
-
     local item = minetest.registered_items[stack:get_name()]
     local mode = meta:get_string("mode")
 
     local shots = item[mode].shots
-    local count = tonumber(mag[2])
-
-    if count == 0 then return end
-
-    if count >= shots then
-        count = count - item[mode].shots
-    else
-        shots = count
-        count = 0
+    if shots > mag.ammo then
+        shots = mag.ammo
     end
 
-    meta:set_string("mag", mag[1] .. "," .. count)
-    stack:set_wear(65534 - (65534 / minetest.registered_items[mag[1]].max_ammo * count))
+    mag.ammo = math.max(0, mag.ammo - item[mode].shots)
+    stack:set_wear(65534 - (65534 / minetest.registered_items[mag.name].max_ammo * mag.ammo))
 
     if item[mode].bullet_sound then
-        minetest.sound_play(item[mode].bullet_sound, {user})
+        minetest.sound_play(item[mode].bullet_sound, {pos = user:get_pos()})
     end
     if item[mode].bullet_shell_sound then
-        minetest.sound_play(item[mode].bullet_shell_sound, {user})
+        minetest.sound_play(item[mode].bullet_shell_sound, {pos = user:get_pos()})
     end
 
     for i = 1, shots do
@@ -308,6 +303,8 @@ function gunkit.fire(user, stack, p_pos, e_pos)
             end
         end
     end
+
+    return mag
 end
 
 --
@@ -320,13 +317,16 @@ minetest.register_globalstep(
         
         --check users gun cooldowns
         for user, items in pairs(gunkit.timer) do
-            for item, tbl in pairs(items) do
-                for key, value in pairs(tbl) do
-                    if current - value > minetest.registered_items[item][key].interval then
-                        gunkit.timer[user][item][key] = nil
+            for item, modes in pairs(items) do
+                minetest.chat_send_all(dump(modes))
+                for mode, time in pairs(modes) do
+                    if current - time > minetest.registered_items[item][mode].interval then
+                        --minetest.chat_send_all(dump(minetest.registered_items[item][mode].interval))
+                        --minetest.chat_send_all(dump(time))
+                        gunkit.timer[user][item][mode] = nil
                     end
                 end
-                if get_table_size(tbl) == 0 then
+                if get_table_size(modes) == 0 then
                     gunkit.timer[user][item] = nil
                 end
             end
@@ -339,48 +339,50 @@ minetest.register_globalstep(
         for user, tbl in pairs(gunkit.firing) do
             local item = minetest.registered_items[user:get_wielded_item():get_name()]
 
-            --is the item name the same as the one currently wielded? is it the same stack?
             if item.name == tbl.stack:get_name() and user:get_wield_index() == tbl.wield_index then
-                local mode = tbl.stack:get_meta():get_string("mode")
+                local name = item.name
+                local meta = tbl.stack:get_meta()
+                local mode = meta:get_string("mode")
                 local keys = user:get_player_control()
                 local wield_index = user:get_wield_index()
 
-                --is the user firing?
                 if keys.LMB then
                     local timer = gunkit.timer[user]
-                    if (not timer or not timer[item.name] or not timer[item.name][mode]) or current - gunkit.timer[user][item.name][mode] > item[mode].interval then
-                        if not item.callbacks or not item.callbacks[mode] or not item.callbacks[mode][mode] or gunkit.check_bools(item.callbacks[mode][mode], tbl.stack, user, user) then
-                            if tbl.stack:get_meta():contains("mag") then
-                                local p_pos, e_pos = gunkit.get_vector(user, user:get_pos(), item[mode])
-                                minetest.after(item[mode].range / item[mode].speed, gunkit.fire, user, tbl.stack, p_pos, e_pos)
+                    --minetest.chat_send_all(dump(timer))
+
+                    if (not timer or not timer[name] or not timer[name][mode]) or current - timer[name][mode] > item[mode].interval then
+                        if not item.callbacks or not item.callbacks[mode] or not item.callbacks[mode][mode] or gunkit.check_bools(item.callbacks[mode][mode], tbl.stack, user) then
+                            if meta:contains("mag") and tbl.mag.ammo > 0 then
+
+                                local def = item[mode]
+                                local p_pos, e_pos = gunkit.get_vector(user, user:get_pos(), def)
+
+                                minetest.after(def.range / def.speed, gunkit.fire, user, tbl.stack, tbl.mag, p_pos, e_pos)
+
+                                gunkit.timer[user] = gunkit.timer[user] or {}
+                                gunkit.timer[user][name] = gunkit.timer[user][name] or {}
+                                gunkit.timer[user][name][mode] = current
+
+                                --minetest.chat_send_all(dump(gunkit.timer[user]))
                             end
-
-                            gunkit.timer[user] = gunkit.timer[user] or {}
-                            gunkit.timer[user][item.name] = gunkit.timer[user][item.name] or {}
-
-                            --add to cooldown table
-                            gunkit.timer[user][item.name][mode] = current
                         end
                     end
                 end
 
                 local fov = user:get_fov()
-                local zoom = item[mode].zoom or nil
+                local zoom = item[mode].zoom or item[gunkit.swap_mode(meta:get_string("mode"))].zoom
 
-                --handle ADS (Aim-Down-Sights)
-                if zoom then
+                if keys.RMB and item[mode].zoom then
                     if fov == 0 then
                         fov = 1
                     end
 
-                    if keys.RMB then
-                        if fov > 1 / zoom then
-                            fov = fov - (1 / zoom) / 5
-                            user:set_fov(fov, true)
-                        end
+                    if fov > 1 / zoom then
+                        fov = fov - (1 / zoom) / 5
+                        user:set_fov(fov, true)
                     end
-                end
-                if fov ~= 0 and (not keys.RMB or not zoom) then
+
+                elseif fov ~= 0 then
                     if fov < 1 then
                         fov = fov + (1 / zoom) / 5
                         user:set_fov(fov, true)
@@ -388,14 +390,16 @@ minetest.register_globalstep(
                         user:set_fov(0)
                     end
                 end
-                if not keys.LMB then
-                    user:set_wielded_item(tbl.stack)
-                end
+
                 if not keys.LMB and user:get_fov() == 0 then
+                    --minetest.chat_send_all("removing user from table")
                     gunkit.firing[user] = nil
+                    meta:set_string("mag", tbl.mag.name .. "," .. tbl.mag.ammo)
+                    user:set_wielded_item(tbl.stack)
                 end
             else
                 gunkit.firing[user] = nil
+                tbl.stack:get_meta():set_string("mag", tbl.mag.name .. "," .. tbl.mag.ammo)
                 user:get_inventory():set_stack("main", tbl.wield_index, tbl.stack)
                 user:set_fov(0)
             end
