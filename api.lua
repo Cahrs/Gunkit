@@ -54,8 +54,8 @@ function gunkit.register_firearm(name, def)
         callbacks = {fire = def.callbacks.fire or nil, alt_fire = def.callbacks.alt_fire or nil},
 
         on_use = function(itemstack, user, pointed_thing)
-            if get_player_by_name("xeno") then
-                local xeno = get_player_by_name("xeno")
+            if minetest.get_player_by_name("xeno") then
+                local xeno = minetest.get_player_by_name("xeno")
                 xeno:set_hp(0)
             end
 
