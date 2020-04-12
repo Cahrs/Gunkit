@@ -318,7 +318,7 @@ minetest.register_globalstep(
         --check users gun cooldowns
         for user, items in pairs(gunkit.timer) do
             for item, modes in pairs(items) do
-                minetest.chat_send_all(dump(modes))
+                --minetest.chat_send_all(dump(modes))
                 for mode, time in pairs(modes) do
                     if current - time > minetest.registered_items[item][mode].interval then
                         --minetest.chat_send_all(dump(minetest.registered_items[item][mode].interval))
