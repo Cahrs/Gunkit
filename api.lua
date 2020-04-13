@@ -56,13 +56,16 @@ function gunkit.register_firearm(name, def)
         on_use = function(itemstack, user, pointed_thing)
             local meta = itemstack:get_meta()
             
+            --set the fire mode on first use
             if not meta:contains("mode") then
                 meta:set_string("mode", "fire")
             end
 
+            --is the gun loaded?
             if not meta:contains("mag") then
                 local gun = minetest.registered_items[itemstack:get_name()]
 
+                --search through the players inv looking for a mag with the most ammo
                 local upper, upper_bullets, idx
                 for index, stack in ipairs(user:get_inventory():get_list("main")) do
                     local meta = stack:get_meta()
@@ -74,6 +77,7 @@ function gunkit.register_firearm(name, def)
                     end
                 end
 
+                --load the mag
                 if upper and upper_bullets and idx then
                     meta:set_string("mag", upper:get_name() .. "," .. upper_bullets)
                     itemstack:set_wear(65534 - (65534 / minetest.registered_items[upper:get_name()].max_ammo * upper_bullets) + 1)
@@ -84,6 +88,7 @@ function gunkit.register_firearm(name, def)
                 local temp = meta:get_string("mag"):split(",")
                 local mag, ammo = temp[1], tonumber(temp[2])
 
+                --if not already firing, initiate
                 if not gunkit.firing[user] and ammo > 0 then
                     gunkit.firing[user] = {stack = itemstack, wield_index = user:get_wield_index(), mag = {name = mag, ammo = ammo}}
                 end
@@ -93,11 +98,13 @@ function gunkit.register_firearm(name, def)
         on_secondary_use = function(itemstack, user, pointed_thing)
             local meta = itemstack:get_meta()
 
+            --set fire mode on initial use
             if not meta:get_string("mode") then
                 meta:set_string("mode", "fire")
                 return itemstack
             end
 
+            --check if the gun is loaded
             if meta:contains("mag") then
                 local temp = meta:get_string("mag"):split(",")
                 local mag, ammo = temp[1], tonumber(temp[2])
@@ -313,16 +320,13 @@ end
 
 minetest.register_globalstep(
     function(dtime)
-        local current = minetest.get_us_time() / 100000
+        local current = minetest.get_us_time() / 1000000
         
         --check users gun cooldowns
         for user, items in pairs(gunkit.timer) do
             for item, modes in pairs(items) do
-                --minetest.chat_send_all(dump(modes))
                 for mode, time in pairs(modes) do
                     if current - time > minetest.registered_items[item][mode].interval then
-                        --minetest.chat_send_all(dump(minetest.registered_items[item][mode].interval))
-                        --minetest.chat_send_all(dump(time))
                         gunkit.timer[user][item][mode] = nil
                     end
                 end
@@ -348,7 +352,6 @@ minetest.register_globalstep(
 
                 if keys.LMB then
                     local timer = gunkit.timer[user]
-                    --minetest.chat_send_all(dump(timer))
 
                     if (not timer or not timer[name] or not timer[name][mode]) or current - timer[name][mode] > item[mode].interval then
                         if not item.callbacks or not item.callbacks[mode] or not item.callbacks[mode][mode] or gunkit.check_bools(item.callbacks[mode][mode], tbl.stack, user) then
@@ -362,8 +365,6 @@ minetest.register_globalstep(
                                 gunkit.timer[user] = gunkit.timer[user] or {}
                                 gunkit.timer[user][name] = gunkit.timer[user][name] or {}
                                 gunkit.timer[user][name][mode] = current
-
-                                --minetest.chat_send_all(dump(gunkit.timer[user]))
                             end
                         end
                     end
@@ -392,7 +393,6 @@ minetest.register_globalstep(
                 end
 
                 if not keys.LMB and user:get_fov() == 0 then
-                    --minetest.chat_send_all("removing user from table")
                     gunkit.firing[user] = nil
                     meta:set_string("mag", tbl.mag.name .. "," .. tbl.mag.ammo)
                     user:set_wielded_item(tbl.stack)
