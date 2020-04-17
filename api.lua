@@ -23,10 +23,16 @@ end
 --
 
 function gunkit.register_firearm(name, def)
+    --are bullet textures for the gun specified?
+    if not def.fire.bullet_texture or def.alt_fire and not def.alt_fire.bullet_texture then return end
+
+    --is the guns mag type not specified?
+    if not def.mag_type then return end
+
     --create some defaults
     local fire = {
-        range = 30,
-        speed = 1000,
+        range = 60,
+        speed = 300,
         spread = 1,
         dmg = 7,
         shots = 1,
@@ -34,13 +40,12 @@ function gunkit.register_firearm(name, def)
         zoom = 2,
     }
 
+    --use defaults for any value not set if def.fire is present
     if def.fire then
         for k, _ in pairs(def.fire) do
             fire[k] = def.fire[k] or fire[k]
         end
     end
-
-    if not fire.bullet_texture or alt_fire and not alt_fire.bullet_texture then return end
 
     minetest.register_tool(name, {
         description = def.description,
@@ -50,12 +55,12 @@ function gunkit.register_firearm(name, def)
         fire = fire,
         alt_fire = def.alt_fire or nil,
         mode = "fire",
-        mag_type = def.mag_type or nil,
+        mag_type = def.mag_type,
         callbacks = {fire = def.callbacks.fire or nil, alt_fire = def.callbacks.alt_fire or nil},
 
         on_use = function(itemstack, user, pointed_thing)
             local meta = itemstack:get_meta()
-            
+
             --set the fire mode on first use
             if not meta:contains("mode") then
                 meta:set_string("mode", "fire")
@@ -68,12 +73,11 @@ function gunkit.register_firearm(name, def)
                 --search through the players inv looking for a mag with the most ammo
                 local upper, upper_bullets, idx
                 for index, stack in ipairs(user:get_inventory():get_list("main")) do
-                    local meta = stack:get_meta()
+                    local imeta = stack:get_meta()
 
-                    if not stack:is_empty() and minetest.registered_items[stack:get_name()].mag_type == gun.mag_type then
-                        if meta:contains("bullets") and (not upper or meta:get_int("bullets") > upper_bullets) then
-                            upper, upper_bullets, idx = stack, meta:get_int("bullets"), index
-                        end
+                    if not stack:is_empty() and minetest.registered_items[stack:get_name()].mag_type == gun.mag_type
+                    and imeta:contains("bullets") and (not upper or imeta:get_int("bullets") > upper_bullets) then
+                        upper, upper_bullets, idx = stack, imeta:get_int("bullets"), index
                     end
                 end
 
@@ -134,7 +138,7 @@ function gunkit.register_firearm(name, def)
                     end
                     itemstack:set_wear(0)
                     meta:set_string("mag", "")
-                
+
                 --if not then swap fire mode
                 elseif meta:contains("mode") then
                     meta:set_string("mode", gunkit.swap_mode(meta:get_string("mode")))
@@ -157,7 +161,7 @@ function gunkit.register_mag(name, def)
         ammo = def.ammo,
         max_ammo = def.max_ammo,
     })
-    
+
     minetest.register_craft({
         type = "shapeless",
         output = name,
@@ -199,7 +203,7 @@ function gunkit.register_mag(name, def)
             local bullets = ammo:get_count()
             local needs = item.max_ammo - count
 
-            if needs == 0 then 
+            if needs == 0 then
                 craft_inv:add_item("craft", {name = item.ammo})
                 itemstack:get_meta():set_int("bullets", count)
                 return
@@ -255,7 +259,7 @@ function gunkit.get_vector(user, p_pos, def)
 
     p_pos.y = p_pos.y + user:get_properties().eye_height or 1.625
     local dir = vector.multiply(minetest.yaw_to_dir(math.rad(1)), def.range)
-    
+
     local e_pos = vector.add(p_pos, vector.multiply(cam.z, dir.z))
     e_pos = vector.add(e_pos, vector.multiply(cam.x, dir.x))
 
@@ -303,7 +307,7 @@ function gunkit.fire(user, stack, mag, p_pos, e_pos)
                 break
             end
             if pointed_thing.type == "object" and pointed_thing.ref ~= user then
-                if not item.callbacks or not item.callbacks[mode] or not item.callbacks[mode].hit or gunkit.check_bools(item.callbacks[mode].hit, stack, user, pointed_thing.ref) then
+                if not item.callbacks or not item.callbacks[mode] or not item.callbacks[mode].on_hit or gunkit.check_bools(item.callbacks[mode].on_hit, stack, user, pointed_thing.ref) then
                     pointed_thing.ref:punch(user, 1.0, {full_punch_interval = 1.0, damage_groups = {fleshy = item[mode].dmg}})
                     break
                 end
@@ -321,7 +325,7 @@ end
 minetest.register_globalstep(
     function(dtime)
         local current = minetest.get_us_time() / 1000000
-        
+
         --check users gun cooldowns
         for user, items in pairs(gunkit.timer) do
             for item, modes in pairs(items) do
@@ -348,24 +352,22 @@ minetest.register_globalstep(
                 local meta = tbl.stack:get_meta()
                 local mode = meta:get_string("mode")
                 local keys = user:get_player_control()
-                local wield_index = user:get_wield_index()
 
                 if keys.LMB then
                     local timer = gunkit.timer[user]
 
-                    if (not timer or not timer[name] or not timer[name][mode]) or current - timer[name][mode] > item[mode].interval then
-                        if not item.callbacks or not item.callbacks[mode] or not item.callbacks[mode][mode] or gunkit.check_bools(item.callbacks[mode][mode], tbl.stack, user) then
-                            if meta:contains("mag") and tbl.mag.ammo > 0 then
+                    if (not timer or not timer[name] or not timer[name][mode] or current - timer[name][mode] > item[mode].interval)
+                    and (not item.callbacks or not item.callbacks[mode] or not item.callbacks[mode].on_fire or gunkit.check_bools(item.callbacks[mode].on_fire, tbl.stack, user)) then
+                        if meta:contains("mag") and tbl.mag.ammo > 0 then
 
-                                local def = item[mode]
-                                local p_pos, e_pos = gunkit.get_vector(user, user:get_pos(), def)
+                            local def = item[mode]
+                            local p_pos, e_pos = gunkit.get_vector(user, user:get_pos(), def)
 
-                                minetest.after(def.range / def.speed, gunkit.fire, user, tbl.stack, tbl.mag, p_pos, e_pos)
+                            minetest.after(def.range / def.speed, gunkit.fire, user, tbl.stack, tbl.mag, p_pos, e_pos)
 
-                                gunkit.timer[user] = gunkit.timer[user] or {}
-                                gunkit.timer[user][name] = gunkit.timer[user][name] or {}
-                                gunkit.timer[user][name][mode] = current
-                            end
+                            gunkit.timer[user] = gunkit.timer[user] or {}
+                            gunkit.timer[user][name] = gunkit.timer[user][name] or {}
+                            gunkit.timer[user][name][mode] = current
                         end
                     end
                 end
