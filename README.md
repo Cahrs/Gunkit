@@ -34,6 +34,15 @@ Used by `gunkit.register_firearm`
 
     -- Table fields used for both fire and alt_fire.
     {
+        bullet_texture = "my_bullet.png",
+        -- Texture to be used for bullet projectiles.
+
+        bullet_sound = "my_gunfire_sound",
+        -- Sound played when firing a firearm.
+
+        bullet_shell_sound = "my_bulletshell_texture",
+        -- Sound played when firing a firearm.
+
         range = 60,
         -- Firearms bullet range.
 
