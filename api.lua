@@ -305,8 +305,8 @@ function gunkit.fire(user, stack, mag, p_pos, e_pos)
             })
             if pointed_thing.type == "node" then
                 break
-            end
-            if pointed_thing.type == "object" and pointed_thing.ref ~= user
+
+            elseif pointed_thing.ref:get_luaentity() and pointed_thing.type == "object" and pointed_thing.ref ~= user
             and not pointed_thing.ref:get_luaentity().name:find("builtin") then
                 if not item.callbacks or not item.callbacks[mode] or not item.callbacks[mode].on_hit or gunkit.check_bools(item.callbacks[mode].on_hit, stack, user, pointed_thing.ref) then
                     pointed_thing.ref:punch(user, 1.0, {full_punch_interval = 1.0, damage_groups = {fleshy = item[mode].dmg}})
