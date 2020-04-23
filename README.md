@@ -3,18 +3,18 @@
 Adds an api to easily register advanced firearms within Minetest.
 
 ## Features
-    Full auto guns
-    Mags
-    Mag Types
-    Alternate fire mode
-    ADS (Aim Down Sights)
+* Full auto guns
+* Mags
+* Mag Types
+* Alternate fire mode
+* ADS (Aim Down Sights)
 
 ## Usage (mods):
-    Registering a firearm:
-    `gunkit.register_firearm(name, firearm definition)`
+Registering a firearm:
+`gunkit.register_firearm(name, firearm definition)`
 
-    Registering a mag:
-    `gunkit.register_mag(name, mag definition)`
+Registering a mag:
+`gunkit.register_mag(name, mag definition)`
 
 Firearm Definition
 ------------------
