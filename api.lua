@@ -56,7 +56,7 @@ function gunkit.register_firearm(name, def)
         alt_fire = def.alt_fire or nil,
         mode = "fire",
         mag_type = def.mag_type,
-        callbacks = {fire = def.callbacks.fire or nil, alt_fire = def.callbacks.alt_fire or nil},
+        callbacks = {on_mag_drop = def.callbacks.on_mag_drop or nil, fire = def.callbacks.fire or nil, alt_fire = def.callbacks.alt_fire or nil},
 
         on_use = function(itemstack, user, pointed_thing)
             local meta = itemstack:get_meta()
@@ -129,7 +129,9 @@ function gunkit.register_firearm(name, def)
                 local mag = meta:get_string("mag"):split(",")
 
                 --is the mag empty?
-                if tonumber(mag[2]) == 0 then
+                if tonumber(mag[2]) == 0
+                and (not def.callbacks or not def.callbacks.on_mag_drop
+                or gunkit.check_bools(def.callbacks.on_mag_drop, {user = dropper, itemstack = itemstack})) then
                     local stack = ItemStack(mag[1])
                     if inv:room_for_item("main", stack) then
                         inv:add_item("main", stack)
@@ -240,16 +242,9 @@ function gunkit.swap_mode(str)
 end
 
 --runs functions and returns returned bool, or true
-function gunkit.check_bools(func, itemstack, user, obj)
-    local bool = true
-
-    if obj then
-        bool = func(itemstack, user, obj)
-    else
-        bool = func(itemstack, user)
-    end
-
-    return bool
+function gunkit.check_bools(func, tbl)
+    --minetest.chat_send_all(dump(tbl))
+    return func(tbl)
 end
 
 --[[get the end of a vector calculated from user pos, look dir, and item range.
@@ -305,12 +300,19 @@ function gunkit.fire(user, stack, mag, p_pos, e_pos)
             })
             if pointed_thing.type == "node" then
                 break
+            end
 
-            elseif pointed_thing.ref:get_luaentity() and pointed_thing.type == "object" and pointed_thing.ref ~= user
-            and not pointed_thing.ref:get_luaentity().name:find("builtin") then
-                if not item.callbacks or not item.callbacks[mode] or not item.callbacks[mode].on_hit or gunkit.check_bools(item.callbacks[mode].on_hit, stack, user, pointed_thing.ref) then
-                    pointed_thing.ref:punch(user, 1.0, {full_punch_interval = 1.0, damage_groups = {fleshy = item[mode].dmg}})
-                    break
+            if pointed_thing.type == "object" and pointed_thing.ref ~= user then
+                local obj = pointed_thing.ref
+                local luaent = obj:get_luaentity()
+                local calls = item.callbacks
+
+                if not luaent or not luaent.name:find("builtin") then
+                    if not calls or not calls[mode] or not calls[mode].on_hit
+                    or gunkit.check_bools(calls[mode].on_hit, {itemstack = stack, user = user, obj = pointed_thing.ref}) then
+                        pointed_thing.ref:punch(user, 1.0, {full_punch_interval = 1.0, damage_groups = {fleshy = item[mode].dmg}})
+                        break
+                    end
                 end
             end
         end
@@ -358,7 +360,8 @@ minetest.register_globalstep(
                     local timer = gunkit.timer[user]
 
                     if (not timer or not timer[name] or not timer[name][mode] or current - timer[name][mode] > item[mode].interval)
-                    and (not item.callbacks or not item.callbacks[mode] or not item.callbacks[mode].on_fire or gunkit.check_bools(item.callbacks[mode].on_fire, tbl.stack, user)) then
+                    and (not item.callbacks or not item.callbacks[mode] or not item.callbacks[mode].on_fire
+                    or gunkit.check_bools(item.callbacks[mode].on_fire, {itemstack = tbl.stack, user = user})) then
                         if meta:contains("mag") and tbl.mag.ammo > 0 then
 
                             local def = item[mode]

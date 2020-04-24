@@ -68,15 +68,19 @@ Used by `gunkit.register_firearm`
     callbacks = {
         -- Table fields used for both fire and alt_fire
         fire = {
-            on_fire = function(itemstack, user),
+            on_fire = function({itemstack, user}),
             -- Function to be called when firearm is used.
             -- Return false to prevent default behavior.
 
-            on_hit = function(itemstack, hitter, object),
+            on_hit = function({itemstack, hitter, object}),
             -- Function to be called when an object is hit by a bullet.
             -- Return false to prevent default behavior.
         },
-    }
+
+        on_mag_drop = function({itemstack, user}),
+        -- Function to be called when a player attempts to drop a guns mag.
+        -- Return false to prevent default behavior.
+    },
 }
 ```
 
