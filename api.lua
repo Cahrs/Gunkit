@@ -282,21 +282,21 @@ function gunkit.fire(user, stack, mag, p_pos, e_pos)
             return n + math.rad(get_random_float(-item[mode].spread, item[mode].spread)) * item[mode].range
         end)
 
+        minetest.add_particle({
+            pos = p_pos,
+            velocity = vector.multiply(vector.subtract(e_pos, p_pos), 2),
+            expirationtime = 3,
+            collisiondetection = true,
+            collision_removal = true,
+            size = 2,
+            texture = item[mode].bullet_texture,
+        })
+
         for pointed_thing in minetest.raycast(p_pos, e_pos, true, false) do
-            minetest.add_particle({
-                pos = p_pos,
-                velocity = vector.multiply(vector.subtract(e_pos, p_pos), 2),
-                expirationtime = 3,
-                collisiondetection = true,
-                collision_removal = true,
-                size = 2,
-                texture = item[mode].bullet_texture,
-            })
             if pointed_thing.type == "node" then
                 break
-            end
 
-            if pointed_thing.type == "object" and pointed_thing.ref ~= user then
+            elseif pointed_thing.type == "object" and pointed_thing.ref ~= user then
                 local obj = pointed_thing.ref
                 local luaent = obj:get_luaentity()
                 local calls = item.callbacks
