@@ -131,7 +131,7 @@ function gunkit.register_firearm(name, def)
                 --is the mag empty?
                 if tonumber(mag[2]) == 0
                 and (not def.callbacks or not def.callbacks.on_mag_drop
-                or gunkit.check_bools(def.callbacks.on_mag_drop, {user = dropper, itemstack = itemstack})) then
+                or def.callbacks.on_mag_drop({user = dropper, itemstack = itemstack})) then
                     local stack = ItemStack(mag[1])
                     if inv:room_for_item("main", stack) then
                         inv:add_item("main", stack)
@@ -143,8 +143,7 @@ function gunkit.register_firearm(name, def)
 
                 --if not then swap fire mode
                 elseif meta:contains("mode") then
-                    meta:set_string("mode", gunkit.swap_mode(meta:get_string("mode")))
-                    minetest.sound_play("toggle_fire", {pos = dropper:get_pos()})
+                    meta:set_string("mode", gunkit.swap_mode(dropper, itemstack:get_name(), meta:get_string("mode")))
                 end
             else
                 minetest.item_drop(itemstack, dropper, pos)
@@ -233,18 +232,13 @@ end
 --
 
 --this should be pretty obvious
-function gunkit.swap_mode(str)
-    if str == "fire" then
-        return "alt_fire"
-    elseif str == "alt_fire" then
-        return "fire"
-    end
-end
+function gunkit.swap_mode(dropper, itemname, mode)
+    local modes = {fire = "alt_fire", alt_fire = "fire"}
 
---runs functions and returns returned bool, or true
-function gunkit.check_bools(func, tbl)
-    --minetest.chat_send_all(dump(tbl))
-    return func(tbl)
+    if minetest.registered_items[itemname][modes[mode]] then
+        minetest.sound_play("toggle_fire", {object = dropper})
+        return modes[mode]
+    end
 end
 
 --[[get the end of a vector calculated from user pos, look dir, and item range.
@@ -309,7 +303,7 @@ function gunkit.fire(user, stack, mag, p_pos, e_pos)
 
                 if not luaent or not luaent.name:find("builtin") then
                     if not calls or not calls[mode] or not calls[mode].on_hit
-                    or gunkit.check_bools(calls[mode].on_hit, {itemstack = stack, user = user, obj = pointed_thing.ref}) then
+                    or calls[mode].on_hit({itemstack = stack, user = user, obj = pointed_thing.ref}) then
                         pointed_thing.ref:punch(user, 1.0, {full_punch_interval = 1.0, damage_groups = {fleshy = item[mode].dmg}})
                         break
                     end
@@ -361,7 +355,7 @@ minetest.register_globalstep(
 
                     if (not timer or not timer[name] or not timer[name][mode] or current - timer[name][mode] > item[mode].interval)
                     and (not item.callbacks or not item.callbacks[mode] or not item.callbacks[mode].on_fire
-                    or gunkit.check_bools(item.callbacks[mode].on_fire, {itemstack = tbl.stack, user = user})) then
+                    or item.callbacks[mode].on_fire({itemstack = tbl.stack, user = user})) then
                         if meta:contains("mag") and tbl.mag.ammo > 0 then
 
                             local def = item[mode]
