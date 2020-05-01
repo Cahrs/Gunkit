@@ -30,18 +30,34 @@ Used by `gunkit.register_firearm`
     inventory_image = "your_firearm.png",
 
     mag_type = "smg",
-    -- Type of mag the gun will load
+    -- Type of mag the gun will load.
+
+    sounds = {
+        mag_load = "mymod:mag_load",
+        -- Sound to be played when loading a mag.
+
+        mag_drop = "mymod:mag_drop",
+        -- Sound to be played when dropping a mag.
+
+        fire_empty = "mymod:fire_empty",
+        -- Sound to be played when firing a gun with an empty mag.
+    },
 
     -- Table fields used for both fire and alt_fire.
     {
         bullet_texture = "my_bullet.png",
         -- Texture to be used for bullet projectiles.
 
-        bullet_sound = "my_gunfire_sound",
-        -- Sound played when firing a firearm.
+        sounds = {
+            fire = "mymod:fire",
+            -- Sound to be played when firing the gun.
 
-        bullet_shell_sound = "my_bulletshell_texture",
-        -- Sound played when firing a firearm.
+            shell_drop = "mymod:shell_drop",
+            -- Sound to be played when firing the gun.
+
+            fire_toggle = "mymod:fire_toggle",
+            -- Sound to be played when swapping from this fire mode.
+        },
 
         range = 60,
         -- Firearms bullet range.
@@ -77,8 +93,12 @@ Used by `gunkit.register_firearm`
             -- Return false to prevent default behavior.
         },
 
-        on_mag_drop = function({itemstack, user}),
+        on_drop_mag = function({itemstack, user}),
         -- Function to be called when a player attempts to drop a guns mag.
+        -- Return false to prevent default behavior.
+
+        on_load_mag = function({itemstack, user}),
+        -- Function to be called when a player attempts to load a gun.
         -- Return false to prevent default behavior.
     },
 }
