@@ -40,6 +40,7 @@ function gunkit.register_firearm(name, def)
         shots = 1,
         interval = 0.15,
         zoom = 2,
+        zoom_time = 2,
     }
 
     --Use defaults for any value not set if def.fire is present
@@ -163,6 +164,13 @@ function gunkit.register_firearm(name, def)
                 local mag, ammo = temp[1], tonumber(temp[2])
 
                 if ammo > 0 and not gunkit.firing[user] then
+                    --Get mode def
+                    local mode_def = minetest.registered_items[itemstack:get_name()][meta:get_string("mode")]
+
+                    if user:get_fov() == 0 and mode_def.zoom and mode_def.zoom_time then
+                        user:set_fov(1 / mode_def.zoom, true, mode_def.zoom_time)
+                    end
+
                     --Add to firing queue
                     gunkit.firing[user] = {
                         stack = itemstack,
@@ -383,7 +391,7 @@ function gunkit.fire(user, stack, mag, p_pos, e_pos)
 
         minetest.add_particle({
             pos = p_pos,
-            velocity = vector.multiply(vector.subtract(e_pos, p_pos), 2),
+            velocity = vector.multiply(vector.direction(p_pos, e_pos), 80),
             expirationtime = 3,
             collisiondetection = true,
             collision_removal = true,
@@ -481,32 +489,23 @@ minetest.register_globalstep(
                 end
 
                 local fov = user:get_fov()
-                local zoom = mode_def.zoom or def[gunkit.swap_mode(meta:get_string("mode"))].zoom
+                local zoom = mode_def.zoom
+                local zoom_time = mode_def.zoom_time
 
-                if keys.RMB and mode_def.zoom then
-                    if fov == 0 then
-                        fov = 1
-                    end
-
-                    if fov > 1 / zoom then
-                        fov = fov - (1 / zoom) / 5
-                        user:set_fov(fov, true)
-                    end
-
-                elseif fov ~= 0 then
-                    if fov < 1 then
-                        fov = fov + (1 / zoom) / 5
-                        user:set_fov(fov, true)
-                    else
-                        user:set_fov(0)
+                if zoom and zoom_time then
+                    if not keys.RMB and fov ~= 0 then
+                        user:set_fov(0, true, zoom_time)
+                    elseif fov == 0 then
+                        user:set_fov(1 / zoom, true, zoom_time)
                     end
                 end
 
-                if not keys.LMB and user:get_fov() == 0 then
+                if not keys.LMB and not keys.RMB then
                     gunkit.firing[user] = nil
                     meta:set_string("mag", tbl.mag.name .. "," .. tbl.mag.ammo)
                     user:set_wielded_item(tbl.stack)
                 end
+
             else
                 gunkit.firing[user] = nil
                 tbl.stack:get_meta():set_string("mag", tbl.mag.name .. "," .. tbl.mag.ammo)
