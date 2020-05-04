@@ -79,6 +79,9 @@ Used by `gunkit.register_firearm`
 
         zoom = 2,
         -- Level of zoom when using ADS (if applicable).
+        
+        zoom_time = 1,
+        -- Time in seconds till fov hits fov*zoom
     },
 
     callbacks = {
