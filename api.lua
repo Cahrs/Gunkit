@@ -495,7 +495,7 @@ minetest.register_globalstep(
                 if zoom and zoom_time then
                     if not keys.RMB and fov ~= 0 then
                         user:set_fov(0, true, zoom_time)
-                    elseif fov == 0 then
+                    elseif keys.RMB and fov == 0 then
                         user:set_fov(1 / zoom, true, zoom_time)
                     end
                 end
